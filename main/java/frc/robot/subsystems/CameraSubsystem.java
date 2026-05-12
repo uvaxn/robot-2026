@@ -53,13 +53,6 @@ public class CameraSubsystem extends SubsystemBase {
     var results = camera.getAllUnreadResults();
     return results;
   }
-  public Optional<Pose2d> getTag9Pose() {
-      var tag = aprilTagLayout.getTagPose(9);
-      if (tag.isPresent()) {
-          return Optional.of(tag.get().toPose2d());
-      }
-      return Optional.empty();
-  }
 
   public Optional<EstimatedRobotPose> getEstimatedGlobalPose() {
     Optional<EstimatedRobotPose> visionEstimate = Optional.empty();
@@ -77,14 +70,21 @@ public class CameraSubsystem extends SubsystemBase {
 
   @Override
   public void periodic() {
-    // This method will be called once per scheduler run
-    Optional<EstimatedRobotPose> estimatedPose = getEstimatedGlobalPose();
-    if (!estimatedPose.isEmpty()) {
-      //TODO: add StdDevs after calibrating the camera
-      swerveDrive.addVisionMeasurement(estimatedPose.get().estimatedPose.toPose2d(), 
-      estimatedPose.get().timestampSeconds);
-      EstimatedPosition.set(estimatedPose.get().estimatedPose);
-    }
-    
+      var results = camera.getAllUnreadResults();
+      
+      Optional<EstimatedRobotPose> visionEstimate = Optional.empty();
+      for (PhotonPipelineResult result : results) {
+          visionEstimate = photonEstimator.update(result);
+      }
+
+      if (visionEstimate.isPresent()) {
+          swerveDrive.addVisionMeasurement(
+              visionEstimate.get().estimatedPose.toPose2d(),
+              visionEstimate.get().timestampSeconds
+          );
+          EstimatedPosition.set(visionEstimate.get().estimatedPose);
+      } else {
+        System.out.println("no april tag!");
+      }
   }
 }
