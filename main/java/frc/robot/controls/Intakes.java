@@ -54,18 +54,18 @@ public class Intakes {
 
     // handles auto-stop on sensor hit
     public void periodic(DigitalInput upperSensor, DigitalInput lowerSensor) {
-        // Update latches — once true, stays true until the opposite movement clears it
+        //once true, stays true until the opposite movement clears it
         if (!lowerSensor.get()) latchedDown = true;
         if (!upperSensor.get()) latchedUp   = true;
 
         if (dropState == DropState.MOVING_DOWN && latchedDown) {
             // stop but no brake
-            MotorMode.setSpeed(dropMotor, 0);
+            dropMotor.stopMotor();
             dropState = DropState.IDLE;
             System.out.println("IntakeDrop: Reached DOWN, motor stopped (no brake).");
         } else if (dropState == DropState.MOVING_UP && latchedUp) {
             // stop and brake to hold position
-            MotorMode.setSpeed(dropMotor, 0);
+            dropMotor.stopMotor();
             MotorMode.setBrake(dropMotor, true);
             dropState = DropState.IDLE;
             System.out.println("IntakeDrop: Reached UP, brake ON.");
@@ -78,6 +78,6 @@ public class Intakes {
     }
 
     public void stopIntake() {
-        MotorMode.setSpeed(intakeMotor, 0);
+        intakeMotor.stopMotor();
     }
 }
