@@ -2,7 +2,7 @@ package frc.robot.controls;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
-
+import edu.wpi.first.wpilibj.RobotBase;
 import com.ctre.phoenix6.hardware.TalonFX;
 
 public class Intakes {
@@ -33,7 +33,7 @@ public class Intakes {
             dropState = DropState.IDLE;
             return;
         }
-        MotorMode.setBrake(dropMotor, false);
+        if (!RobotBase.isSimulation()) MotorMode.setBrake(dropMotor, false);
         MotorMode.setSpeed(dropMotor, -0.1); // TODO: tune speed
         dropState = DropState.MOVING_DOWN;
         System.out.println("IntakeDrop: Moving down");
@@ -47,11 +47,11 @@ public class Intakes {
         if (isUp) {
             System.out.println("IntakeDrop: Already at upper position.");
             MotorMode.setSpeed(dropMotor, 0);
-            MotorMode.setBrake(dropMotor, true);
+            if (!RobotBase.isSimulation()) MotorMode.setBrake(dropMotor, false);
             dropState = DropState.IDLE;
             return;
         }
-        MotorMode.setBrake(dropMotor, false);
+        if (!RobotBase.isSimulation()) MotorMode.setBrake(dropMotor, true);
         MotorMode.setSpeed(dropMotor, 0.1); // TODO: tune speed
         dropState = DropState.MOVING_UP;
         System.out.println("IntakeDrop: Moving UP");

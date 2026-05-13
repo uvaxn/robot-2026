@@ -54,6 +54,7 @@ public class CameraSubsystem extends SubsystemBase {
 
     @Override
   public void periodic() {
+    if (edu.wpi.first.wpilibj.RobotBase.isSimulation()) return;
       var results = camera.getAllUnreadResults();
       cachedResults = results;
       List<EstimatedRobotPose> frameEstimates = new ArrayList<>();

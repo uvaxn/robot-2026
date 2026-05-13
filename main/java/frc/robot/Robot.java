@@ -55,7 +55,5 @@ public class Robot extends TimedRobot {
     @Override public void testExit() {}
     @Override public void simulationPeriodic() {}
     @Override
-    public void simulationInit() {
-        m_robotContainer.drivetrain.startSimThread();
-    }
+    public void simulationInit() {}
 }

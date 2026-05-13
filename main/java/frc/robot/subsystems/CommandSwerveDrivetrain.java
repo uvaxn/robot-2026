@@ -103,6 +103,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                 setControl(m_rotationCharacterization.withRotationalRate(output.in(Volts)));
                 /* also log the requested output for SysId */
                 SignalLogger.writeDouble("Rotational_Rate", output.in(Volts));
+                
             },
             null,
             this
