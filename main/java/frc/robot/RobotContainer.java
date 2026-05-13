@@ -18,7 +18,7 @@ package frc.robot;
  * 
  * Y button -- no clue but does something to wheels
  * 
- * 
+ * Remember to move the intake drop, so that it is up when we start the robot.
  */
 import static edu.wpi.first.units.Units.*;
 import com.ctre.phoenix6.hardware.TalonFX;
@@ -37,7 +37,7 @@ import frc.robot.subsystems.CameraSubsystem;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.PositionSubsystem;
 import frc.robot.controls.EaseofLife;
-import frc.robot.controls.Intakes;
+import frc.robot.subsystems.IntakeSubsystem;
 import frc.robot.controls.Shooters;
 public class RobotContainer {
     private double MaxSpeed = 0.3 * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
@@ -68,18 +68,17 @@ public class RobotContainer {
     //                 m_LowerFeed.set(-0.8);
     EaseofLife MotorMode = new EaseofLife();
 
-    // Limit switches for intake arm
-    public final DigitalInput intakeDropLowerLimit = new DigitalInput(1);
-    public final DigitalInput intakeDropUpperLimit = new DigitalInput(0);
-
-    // avoid duplicate instantiation
-    public final Intakes intakes = new Intakes(m_Intake, m_IntakeDrop);
+    
     public final Shooters shooters = new Shooters(m_ShooterR, m_ShooterL, m_LowerFeed, m_UpperFeed);
     public RobotContainer() {
         configureBindings();
         
     }
-
+    public final IntakeSubsystem intakes = new IntakeSubsystem(
+    m_Intake, m_IntakeDrop,
+    new DigitalInput(0),  // upper limit
+    new DigitalInput(1)   // lower limit
+    );
     private void configureBindings() {
         drivetrain.setDefaultCommand(
             drivetrain.applyRequest(() ->
@@ -109,15 +108,10 @@ public class RobotContainer {
 
         joystick.x().whileTrue(AligntoHub);
         // Intake Mechanisms
+
         joystick.leftTrigger()
-            .onTrue(new InstantCommand(() -> {
-                intakes.startMovingDown(intakeDropLowerLimit);
-                intakes.runIntake(0.8); // actually spin the intake
-            }))
-            .onFalse(new InstantCommand(() -> {
-                intakes.stopIntake();
-                intakes.startMovingUp(intakeDropUpperLimit);
-            }));
+            .onTrue(new InstantCommand(intakes::requestDown, intakes))
+            .onFalse(new InstantCommand(intakes::requestUp,  intakes));
         // Shooting Mechanisms
         joystick.rightTrigger()
             .onTrue(new InstantCommand(() -> shooters.shoot()));
@@ -128,8 +122,5 @@ public class RobotContainer {
         
     public Command getAutonomousCommand() {
         return new InstantCommand(() -> System.out.println("Autonomous disabled."));
-    }
-    public void periodic() {
-        intakes.periodic(intakeDropUpperLimit, intakeDropLowerLimit);
     }
 }
