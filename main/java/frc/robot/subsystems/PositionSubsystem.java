@@ -3,7 +3,6 @@
 // the WPILib BSD license file in the root directory of this project.
 package frc.robot.subsystems;
 
-import java.util.Optional;
 import org.photonvision.EstimatedRobotPose;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.VecBuilder;
@@ -40,12 +39,11 @@ public class PositionSubsystem extends SubsystemBase {
 
     @Override
     public void periodic() {
-        Optional<EstimatedRobotPose> estimatedPose = camera.getEstimatedGlobalPose();
-        if (estimatedPose.isPresent()) {
+        for (EstimatedRobotPose estimate : camera.getEstimatedGlobalPoses()) { // returns List
             swerveDrive.addVisionMeasurement(
-                estimatedPose.get().estimatedPose.toPose2d(),
-                estimatedPose.get().timestampSeconds,
-                getStdDevs(estimatedPose.get())
+                estimate.estimatedPose.toPose2d(),
+                estimate.timestampSeconds,
+                getStdDevs(estimate)
             );
         }
     }

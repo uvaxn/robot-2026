@@ -55,7 +55,7 @@ public class RobotContainer {
     public final CameraSubsystem cameraSubsystem = new CameraSubsystem();
     public final PositionSubsystem positionSubsystem = new PositionSubsystem(drivetrain, cameraSubsystem);
     
-    public final AutoAlign AligntoHub = new AutoAlign(drivetrain, cameraSubsystem, () -> joystick.getLeftY(), () -> joystick.getLeftX(), 0.5);
+    public final AutoAlign AligntoHub = new AutoAlign(drivetrain, cameraSubsystem, () -> joystick.getLeftY(), () -> joystick.getLeftX());
 
     // Motors
     public final TalonFX m_ShooterR    = new TalonFX(23);
@@ -110,8 +110,14 @@ public class RobotContainer {
         joystick.x().whileTrue(AligntoHub);
         // Intake Mechanisms
         joystick.leftTrigger()
-            .onTrue(new InstantCommand(() -> intakes.startMovingDown(intakeDropLowerLimit)))
-            .onFalse(new InstantCommand(() -> intakes.startMovingUp(intakeDropUpperLimit)));
+            .onTrue(new InstantCommand(() -> {
+                intakes.startMovingDown(intakeDropLowerLimit);
+                intakes.runIntake(0.8); // actually spin the intake
+            }))
+            .onFalse(new InstantCommand(() -> {
+                intakes.stopIntake();
+                intakes.startMovingUp(intakeDropUpperLimit);
+            }));
         // Shooting Mechanisms
         joystick.rightTrigger()
             .onTrue(new InstantCommand(() -> shooters.shoot()));

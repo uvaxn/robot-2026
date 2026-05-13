@@ -4,9 +4,10 @@ import com.ctre.phoenix6.controls.Follower;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.MotorAlignmentValue;
 import edu.wpi.first.wpilibj.Timer;
-
+@SuppressWarnings("unused")
 public class Shooters {
     private final TalonFX shooterR;
+
     private final TalonFX shooterL;
     private final TalonFX lowerFeed;
     private final TalonFX upperFeed;

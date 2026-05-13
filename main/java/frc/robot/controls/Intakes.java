@@ -1,5 +1,8 @@
 package frc.robot.controls;
 import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Timer;
+
 import com.ctre.phoenix6.hardware.TalonFX;
 
 public class Intakes {
@@ -9,7 +12,7 @@ public class Intakes {
 
     private enum DropState { IDLE, MOVING_DOWN, MOVING_UP }
     private DropState dropState = DropState.IDLE;
-
+    private double moveStartTime;
     // stay true once triggered, only reset when moving the opposite direction
     private boolean latchedUp   = true;  // assume starting position is UP
     private boolean latchedDown = false;
@@ -22,6 +25,7 @@ public class Intakes {
 
     // keeps moving down until lower sensor trips
     public void startMovingDown(DigitalInput lowerSensor) {
+        moveStartTime = Timer.getFPGATimestamp();
         latchedUp = false; // leaving the top, clear the upper latch
         boolean isDown = !lowerSensor.get() || latchedDown;
         if (isDown) {
@@ -37,7 +41,8 @@ public class Intakes {
 
     // always returns arm upward regardless of current state
     public void startMovingUp(DigitalInput upperSensor) {
-        latchedDown = false; // leaving the bottom, clear the lower latch
+        moveStartTime = Timer.getFPGATimestamp();
+        latchedUp = !upperSensor.get(); // trust the sensor, not an assumption
         boolean isUp = !upperSensor.get() || latchedUp;
         if (isUp) {
             System.out.println("IntakeDrop: Already at upper position.");
@@ -57,7 +62,11 @@ public class Intakes {
         //once true, stays true until the opposite movement clears it
         if (!lowerSensor.get()) latchedDown = true;
         if (!upperSensor.get()) latchedUp   = true;
-
+        if (dropState != DropState.IDLE && Timer.getFPGATimestamp() - moveStartTime > 2.0) { // 2 second timeout
+            dropMotor.stopMotor();
+            dropState = DropState.IDLE;
+            DriverStation.reportWarning("IntakeDrop: Motion timeout!", false);
+        }
         if (dropState == DropState.MOVING_DOWN && latchedDown) {
             // stop but no brake
             dropMotor.stopMotor();
@@ -73,9 +82,9 @@ public class Intakes {
     }
 
     // Hold to spin intake, release to stop
-    public void runIntake(int percent) {
-        MotorMode.setSpeed(intakeMotor, percent);
-    }
+        public void runIntake(double percent) {
+            MotorMode.setSpeed(intakeMotor, percent / 100.0);
+        }
 
     public void stopIntake() {
         intakeMotor.stopMotor();

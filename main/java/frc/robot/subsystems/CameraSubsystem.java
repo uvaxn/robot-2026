@@ -3,6 +3,7 @@
 // the WPILib BSD license file in the root directory of this project.
 package frc.robot.subsystems;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.photonvision.EstimatedRobotPose;
@@ -20,17 +21,18 @@ import frc.robot.Constants;
 import org.photonvision.targeting.PhotonPipelineResult;
 
 public class CameraSubsystem extends SubsystemBase {
-    public StructPublisher<Pose3d> EstimatedPosition;
-    public final PhotonCamera camera;
+    private StructPublisher<Pose3d> EstimatedPosition;
+    private final PhotonCamera camera;
     private final PhotonPoseEstimator photonEstimator;
     private final AprilTagFieldLayout aprilTagLayout = AprilTagFieldLayout.loadField(AprilTagFields.k2026RebuiltAndymark);
 
-    private Optional<EstimatedRobotPose> latestEstimate = Optional.empty();
+    private List<EstimatedRobotPose> latestEstimates = List.of(); // was Optional
     private List<PhotonPipelineResult> cachedResults = List.of();
     public CameraSubsystem() {
         camera = new PhotonCamera("limelight4");
         photonEstimator = new PhotonPoseEstimator(aprilTagLayout, PoseStrategy.LOWEST_AMBIGUITY, Constants.kcamToRobot);
         EstimatedPosition = NetworkTableInstance.getDefault().getStructTopic("EstimatedPose", Pose3d.struct).publish();
+        
     }
 
     public Optional<Pose2d> getTagPose2d(int id) {
@@ -38,32 +40,36 @@ public class CameraSubsystem extends SubsystemBase {
         if (tag.isPresent()) {
             return Optional.of(tag.get().toPose2d());
         }
+        
         return Optional.empty();
     }
+    
     public List<PhotonPipelineResult> getCachedResults() {
         return cachedResults;
     }
-    public List<PhotonPipelineResult> latestResults() {
-        return camera.getAllUnreadResults();
+    public List<EstimatedRobotPose> getEstimatedGlobalPoses() {
+        return latestEstimates;
     }
+    
 
-    public Optional<EstimatedRobotPose> getEstimatedGlobalPose() {
-        return latestEstimate;
-    }
-
-
-  @Override
+    @Override
   public void periodic() {
-      latestEstimate = Optional.empty();
       var results = camera.getAllUnreadResults();
-      cachedResults = results; // cache before processing
-
+      cachedResults = results;
+      List<EstimatedRobotPose> frameEstimates = new ArrayList<>();
       for (PhotonPipelineResult result : results) {
-          Optional<EstimatedRobotPose> visionEstimate = photonEstimator.estimateLowestAmbiguityPose(result);
+          Optional<EstimatedRobotPose> visionEstimate = photonEstimator.update(result);
           if (visionEstimate.isPresent()) {
-              latestEstimate = visionEstimate;
-              EstimatedPosition.set(visionEstimate.get().estimatedPose);
+              Pose2d pose = visionEstimate.get().estimatedPose.toPose2d();
+              if (pose.getX() < 0 || pose.getX() > 17.5 ||
+                  pose.getY() < 0 || pose.getY() > 8.0) continue;
+              frameEstimates.add(visionEstimate.get());
+              EstimatedPosition.set(              // ✅ single call, with timestamp
+                  visionEstimate.get().estimatedPose,
+                  (long)(visionEstimate.get().timestampSeconds * 1e6)
+              );
           }
       }
+      latestEstimates = frameEstimates;
   }
 }
