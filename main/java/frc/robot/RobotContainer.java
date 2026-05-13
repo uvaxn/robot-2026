@@ -35,6 +35,7 @@ import frc.robot.commands.AutoAlign;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.CameraSubsystem;
 import frc.robot.subsystems.CommandSwerveDrivetrain;
+import frc.robot.subsystems.PositionSubsystem;
 import frc.robot.controls.EaseofLife;
 import frc.robot.controls.Intakes;
 import frc.robot.controls.Shooters;
@@ -51,8 +52,10 @@ public class RobotContainer {
     private final CommandXboxController joystick = new CommandXboxController(0);
 
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
-    public final CameraSubsystem camera = new CameraSubsystem(drivetrain);
-    public final AutoAlign AligntoHub = new AutoAlign(drivetrain, camera, () -> joystick.getLeftY(), () -> joystick.getLeftX(), 0.5);
+    public final CameraSubsystem cameraSubsystem = new CameraSubsystem();
+    public final PositionSubsystem positionSubsystem = new PositionSubsystem(drivetrain, cameraSubsystem);
+    
+    public final AutoAlign AligntoHub = new AutoAlign(drivetrain, cameraSubsystem, () -> joystick.getLeftY(), () -> joystick.getLeftX(), 0.5);
 
     // Motors
     public final TalonFX m_ShooterR    = new TalonFX(23);

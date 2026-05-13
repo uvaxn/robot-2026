@@ -1,181 +1,162 @@
 // Copyright (c) FIRST and other WPILib contributors.
 // Open Source Software; you can modify and/or share it under the terms of
 // the WPILib BSD license file in the root directory of this project.
-
 package frc.robot.commands;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.DoubleSupplier;
 
-import org.photonvision.EstimatedRobotPose;
-
 import com.ctre.phoenix6.swerve.SwerveRequest;
-import com.ctre.phoenix6.swerve.SwerveDrivetrain.SwerveDriveState;
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
-import frc.robot.Constants;
 import frc.robot.Vars;
-import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.CameraSubsystem;
+import frc.robot.subsystems.CommandSwerveDrivetrain;
+
 public class AutoAlign extends Command {
 
-  /*
-   * Because this command's owner can pass X and Y movements to apply to the robot,
-   * it is good to give the owner a fixed frame of reference to talk about.
-   * To do this, we make a field centric swerve request.
-   * 
-   * We apply deadband to the percent max speed supplier from the owner.
-   * We do not apply a deadband to our own output to the swerve request.
-   * (In the case we would like to deadband out rotation, the PID itself must be deadbanded.)
-   * Use open loop voltage because we feed request with numbers from the owner.
-   */
-  private final SwerveRequest.FieldCentric request = new SwerveRequest.FieldCentric()
-          .withDeadband(Vars.MaxSpeed * 0.1) // Add a 10% deadband to the caller
-          // .withRotationalDeadband(Vars.MaxAngularRate * 0.1) // no rotational deadband
-          .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
-  // TODO consider using FieldCentricFacingAngle. Then the PID could possibly be baked directly into the swerve request.
+    // Red and blue hub tag IDs
+    private static final List<Integer> RED_HUB_TAGS  = List.of(2, 3, 4, 5, 8, 9, 10, 11);
+    private static final List<Integer> BLUE_HUB_TAGS = List.of(18, 19, 20, 21, 24, 25, 26, 27);
 
-  private CommandSwerveDrivetrain swerveDrive;
-  private ProfiledPIDController rotationPID;
-  DoubleSupplier forwardSupplier;
-  DoubleSupplier leftSupplier;
-  double indexerPercent;
+    private final SwerveRequest.FieldCentric request = new SwerveRequest.FieldCentric()
+            .withDeadband(Vars.MaxSpeed * 0.1)
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
 
-  Translation2d hubTranslation;
+    private final ProfiledPIDController rotationPID = new ProfiledPIDController(
+        Vars.AlignToHubP,
+        Vars.AlignToHubI,
+        Vars.AlignToHubD,
+        new TrapezoidProfile.Constraints(
+            Vars.MaxAngularRate,
+            Vars.MaxAngularRate * 2
+        )
+    );
 
-  /**
-   * Creates a new AlignToHub.
-   * 
-   * This command rotates the robot to face the center of the alliance hub.
-   * The owner of this command must provide an supplier for the forward and left motion of the robot to also get applied to the robot.
-   * (These are field centric.)
-   * This command also constantly revs the shooter so that shooting can happen immediately when ready.
-   * When the robot is pointed within the allowed error of the target and the RPM is within the allowed amount, this command feeds the shooter.
-   * 
-   * @param commandSwerveDrivetrain the drivetrain subsystem
-   * @param shooterSubsystem the shooter subsystem
-   * @param indexerSubsystem the indexer subsystem
-   * @param forwardSupplier field centric percent max speed supplier
-   * @param leftSupplier field centric percent max speed supplier
-   * @param indexerPercent the percent to run the indexer at when feeding
-   */
-  private CameraSubsystem cameraSubsystem; // add field
+    private final CommandSwerveDrivetrain swerveDrive;
+    private final CameraSubsystem cameraSubsystem;
+    private final DoubleSupplier forwardSupplier;
+    private final DoubleSupplier leftSupplier;
 
-  public AutoAlign(CommandSwerveDrivetrain commandSwerveDrivetrain,
-                  CameraSubsystem cameraSubsystem,           // add this
-                  DoubleSupplier forwardSupplier,
-                  DoubleSupplier leftSupplier,
-                  double indexerPercent) {
-      addRequirements(commandSwerveDrivetrain);
-      this.swerveDrive = commandSwerveDrivetrain;
-      this.cameraSubsystem = cameraSubsystem;                 // store it
-      this.forwardSupplier = forwardSupplier;
-      this.leftSupplier = leftSupplier;
-      this.indexerPercent = indexerPercent;
-      // ... rest unchanged
-  }
+    // Precomputed hub center for odometry fallback
+    private Translation2d hubCenter;
+    private List<Integer> hubTagIds;
 
-  // Called when the command is initially scheduled.
-  @Override
-  public void initialize() {
-      swerveDrive.samplePoseAt(Timer.getFPGATimestamp())
-          .ifPresent(pose -> rotationPID.reset(pose.getRotation().getRadians()));
-      hubTranslation = Constants.getTeamHubTranslation();
-  }
+    public AutoAlign(CommandSwerveDrivetrain swerveDrive,
+                     CameraSubsystem cameraSubsystem,
+                     DoubleSupplier forwardSupplier,
+                     DoubleSupplier leftSupplier,
+                     double indexerPercent) {
+        this.swerveDrive = swerveDrive;
+        this.cameraSubsystem = cameraSubsystem;
+        this.forwardSupplier = forwardSupplier;
+        this.leftSupplier = leftSupplier;
+        addRequirements(swerveDrive);
 
-  // Called every time the scheduler runs while the command is scheduled.
-  @Override
-  public void execute() {
-      Optional<Pose2d> possiblePose = swerveDrive.samplePoseAt(Timer.getFPGATimestamp());
+        // PID treats rotation as continuous — -pi to pi
+        rotationPID.enableContinuousInput(-Math.PI, Math.PI);
+        rotationPID.setTolerance(Math.toRadians(2)); // 2 degree tolerance
+    }
 
-      if (possiblePose.isEmpty()) {
-          swerveDrive.setControl(
-              request.withVelocityX(forwardSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withVelocityY(leftSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withRotationalRate(0)
-          );
-          return;
-      }
+    @Override
+    public void initialize() {
+        // Determine alliance and pick correct tag IDs
+        var alliance = DriverStation.getAlliance();
+        hubTagIds = (alliance.isPresent() && alliance.get() == DriverStation.Alliance.Red)
+            ? RED_HUB_TAGS
+            : BLUE_HUB_TAGS;
 
-      Pose2d robotPose = possiblePose.get();
+        // Precompute hub center from field layout for odometry fallback
+        double totalX = 0, totalY = 0;
+        int count = 0;
+        for (int id : hubTagIds) {
+            Optional<Pose2d> tagPose = cameraSubsystem.getTagPose2d(id);
+            if (tagPose.isPresent()) {
+                totalX += tagPose.get().getX();
+                totalY += tagPose.get().getY();
+                count++;
+            }
+        }
+        hubCenter = (count > 0)
+            ? new Translation2d(totalX / count, totalY / count)
+            : new Translation2d(0, 0);
 
-      double bestDistance = Double.MAX_VALUE;
-      Optional<Pose2d> nearestTagPose = Optional.empty();
+        // Reset PID to current heading
+        swerveDrive.samplePoseAt(Timer.getFPGATimestamp())
+            .ifPresent(pose -> rotationPID.reset(pose.getRotation().getRadians()));
+    }
 
-      var results = cameraSubsystem.latestResults();
+    @Override
+    public void execute() {
+        // Get current robot pose from odometry
+        Optional<Pose2d> possiblePose = swerveDrive.samplePoseAt(Timer.getFPGATimestamp());
+        if (possiblePose.isEmpty()) {
+            swerveDrive.setControl(
+                request.withVelocityX(forwardSupplier.getAsDouble() * Vars.MaxSpeed)
+                       .withVelocityY(leftSupplier.getAsDouble() * Vars.MaxSpeed)
+                       .withRotationalRate(0)
+            );
+            return;
+        }
 
-      for (var result : results) {
-          if (!result.hasTargets()) continue;
+        Pose2d robotPose = possiblePose.get();
 
-          for (var target : result.getTargets()) {
-              int id = target.getFiducialId();
-              if (id <= 0) continue;
+        // Try to find nearest visible hub tag from cached results
+        double bestDist = Double.MAX_VALUE;
+        Translation2d target = null;
 
-              Optional<Pose2d> tagPoseOpt = cameraSubsystem.getTagPose2d(id);
-              if (tagPoseOpt.isEmpty()) continue;
+        for (var result : cameraSubsystem.getCachedResults()) {
+            if (!result.hasTargets()) continue;
+            for (var photonTarget : result.getTargets()) {
+                int id = photonTarget.getFiducialId();
+                if (!hubTagIds.contains(id)) continue; // skip non-hub tags
 
-              Pose2d tagPose = tagPoseOpt.get();
+                Optional<Pose2d> tagPose = cameraSubsystem.getTagPose2d(id);
+                if (tagPose.isEmpty()) continue;
 
-              double dist = robotPose.getTranslation()
-                                    .getDistance(tagPose.getTranslation());
+                double dist = robotPose.getTranslation()
+                                       .getDistance(tagPose.get().getTranslation());
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    target = tagPose.get().getTranslation();
+                }
+            }
+        }
 
-              if (dist < bestDistance) {
-                  bestDistance = dist;
-                  nearestTagPose = Optional.of(tagPose);
-              }
-          }
-      }
+        // Fall back to hub center if no hub tags visible
+        if (target == null) {
+            target = hubCenter;
+        }
 
-      if (nearestTagPose.isPresent()) {
-          Pose2d tagPose = nearestTagPose.get();
+        // Calculate angle from robot to target
+        Translation2d toTarget = target.minus(robotPose.getTranslation());
+        double targetAngle = Math.atan2(toTarget.getY(), toTarget.getX());
 
-          Translation2d toTag = tagPose.getTranslation()
-                                      .minus(robotPose.getTranslation());
+        rotationPID.setGoal(targetAngle);
+        double output = rotationPID.calculate(robotPose.getRotation().getRadians());
 
-          double targetAngle = Math.atan2(toTag.getY(), toTag.getX());
+        swerveDrive.setControl(
+            request.withVelocityX(forwardSupplier.getAsDouble() * Vars.MaxSpeed)
+                   .withVelocityY(leftSupplier.getAsDouble() * Vars.MaxSpeed)
+                   .withRotationalRate(output)
+        );
+    }
 
-          rotationPID.setGoal(targetAngle);
+    @Override
+    public void end(boolean interrupted) {
+        swerveDrive.setControl(new SwerveRequest.Idle());
+    }
 
-          double output = rotationPID.calculate(
-              robotPose.getRotation().getRadians()
-          );
-
-          swerveDrive.setControl(
-              request.withVelocityX(forwardSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withVelocityY(leftSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withRotationalRate(output)
-          );
-
-      } else {
-          // No tag → don't rotate
-          swerveDrive.setControl(
-              request.withVelocityX(forwardSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withVelocityY(leftSupplier.getAsDouble() * Vars.MaxSpeed)
-                    .withRotationalRate(0)
-          );
-      }
-  }
-
-  // Called once the command ends or is interrupted.
-  @Override
-  public void end(boolean interrupted) {
-    /*
-     * When the command ends, it is important to stop all moters.
-     * The owner of this command can overwrite this function if this behavior is not desired.
-     */
-    swerveDrive.applyRequest(()-> new SwerveRequest.Idle());
-  }
-
-  // Returns true when the command should end.
-  @Override
-  public boolean isFinished() {
-    return false;
-  }
+    @Override
+    public boolean isFinished() {
+        return false;
+    }
 }
