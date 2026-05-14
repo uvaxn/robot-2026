@@ -15,7 +15,9 @@ import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.networktables.StructPublisher;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import org.photonvision.targeting.PhotonPipelineResult;
@@ -26,8 +28,12 @@ public class CameraSubsystem extends SubsystemBase {
     private final PhotonPoseEstimator photonEstimator;
     private final AprilTagFieldLayout aprilTagLayout = AprilTagFieldLayout.loadField(AprilTagFields.k2026RebuiltAndymark);
 
-    private List<EstimatedRobotPose> latestEstimates = List.of(); // was Optional
+    private List<EstimatedRobotPose> latestEstimates = List.of();
     private List<PhotonPipelineResult> cachedResults = List.of();
+    private final StructArrayPublisher<Pose2d> visibleTagPublisher =
+        NetworkTableInstance.getDefault()
+            .getStructArrayTopic("VisibleTags", Pose2d.struct)
+            .publish();
     public CameraSubsystem() {
         camera = new PhotonCamera("limelight4");
         photonEstimator = new PhotonPoseEstimator(aprilTagLayout, PoseStrategy.LOWEST_AMBIGUITY, Constants.kcamToRobot);
@@ -65,12 +71,33 @@ public class CameraSubsystem extends SubsystemBase {
               if (pose.getX() < 0 || pose.getX() > 17.5 ||
                   pose.getY() < 0 || pose.getY() > 8.0) continue;
               frameEstimates.add(visionEstimate.get());
-              EstimatedPosition.set(              // ✅ single call, with timestamp
+              EstimatedPosition.set(              
                   visionEstimate.get().estimatedPose,
                   (long)(visionEstimate.get().timestampSeconds * 1e6)
               );
           }
       }
       latestEstimates = frameEstimates;
+      List<Pose2d> visiblePoses = new ArrayList<>();
+    List<Double> visibleTagIds = new ArrayList<>();
+        for (PhotonPipelineResult result : cachedResults) {
+            if (!result.hasTargets()) continue;
+            for (var target : result.getTargets()) {
+                getTagPose2d(target.getFiducialId())
+                    .ifPresent(visiblePoses::add);
+            }
+        }
+        for (PhotonPipelineResult result : cachedResults) {
+            if (!result.hasTargets()) continue;
+                for (var target : result.getTargets()) {
+                    int id = target.getFiducialId();
+                    visibleTagIds.add((double) id);
+                    getTagPose2d(id).ifPresent(visiblePoses::add);
+                }
+            }
+            visibleTagPublisher.set(visiblePoses.toArray(new Pose2d[0]));
+            SmartDashboard.putNumberArray("Vision/TagsVisible", //bascilly outputs which tags it's currently seeing
+            visibleTagIds.stream().mapToDouble(Double::doubleValue).toArray());
+
   }
 }

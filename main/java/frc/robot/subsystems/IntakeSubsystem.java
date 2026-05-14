@@ -5,7 +5,7 @@ import com.ctre.phoenix6.controls.StaticBrake;
 import com.ctre.phoenix6.hardware.TalonFX;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 public class IntakeSubsystem extends SubsystemBase {
 
     private final TalonFX intakeMotor;
@@ -92,5 +92,11 @@ public class IntakeSubsystem extends SubsystemBase {
             }
             case IDLE -> {} // motor already set to coast/brake nothing to do
         }
+        SmartDashboard.putNumber("IntakeDrop/Rotation", dropMotor.getPosition().getValueAsDouble());
+        SmartDashboard.putNumber("IntakeDrop/Velocity", dropMotor.getVelocity().getValueAsDouble());
+        SmartDashboard.putString("IntakeDrop/State", state.toString());
+        SmartDashboard.putBoolean("IntakeDrop/AtTop", isAtTop());
+        SmartDashboard.putBoolean("IntakeDrop/AtBottom", isAtBottom());
+        
     }
 }
