@@ -44,11 +44,11 @@ public class PositionSubsystem extends SubsystemBase {
             .orElse(0);
 
         if (tagCount >= 2) {
-            return VecBuilder.fill(0.3, 0.3, 9999);
+            return VecBuilder.fill(0.2, 0.2, 0.05); // multi-tag trust rotation
         } else if (tagCount == 1 && avgDist <= 4) {
-            return VecBuilder.fill(0.7, 0.7, 9999);
+            return VecBuilder.fill(0.7, 0.7, 9999);  // single tag close ignore rotation
         } else {
-            return VecBuilder.fill(4.0, 4.0, 9999);
+            return VecBuilder.fill(4.0, 4.0, 9999);  // single tag far barely trust it
         }
     }
 
