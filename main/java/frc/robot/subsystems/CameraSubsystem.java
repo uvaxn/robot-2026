@@ -36,7 +36,11 @@ public class CameraSubsystem extends SubsystemBase {
             .publish();
     public CameraSubsystem() {
         camera = new PhotonCamera("limelight4");
-        photonEstimator = new PhotonPoseEstimator(aprilTagLayout, PoseStrategy.LOWEST_AMBIGUITY, Constants.kcamToRobot);
+        photonEstimator = new PhotonPoseEstimator(aprilTagLayout, PoseStrategy.MULTI_TAG_PNP_ON_COPROCESSOR, Constants.kcamToRobot);
+
+        photonEstimator.setMultiTagFallbackStrategy( // if multitag doesnt work for ANY reason
+            PoseStrategy.LOWEST_AMBIGUITY
+        );
         EstimatedPosition = NetworkTableInstance.getDefault().getStructTopic("EstimatedPose", Pose3d.struct).publish();
         
     }
@@ -80,18 +84,14 @@ public class CameraSubsystem extends SubsystemBase {
       latestEstimates = frameEstimates;
       List<Pose2d> visiblePoses = new ArrayList<>();
     List<Double> visibleTagIds = new ArrayList<>();
-        for (PhotonPipelineResult result : cachedResults) {
-            if (!result.hasTargets()) continue;
-            for (var target : result.getTargets()) {
-                getTagPose2d(target.getFiducialId())
-                    .ifPresent(visiblePoses::add);
-            }
-        }
-        for (PhotonPipelineResult result : cachedResults) {
-            if (!result.hasTargets()) continue;
+            for (PhotonPipelineResult result : cachedResults) {
+                if (!result.hasTargets()) continue;
+
                 for (var target : result.getTargets()) {
                     int id = target.getFiducialId();
+
                     visibleTagIds.add((double) id);
+
                     getTagPose2d(id).ifPresent(visiblePoses::add);
                 }
             }
