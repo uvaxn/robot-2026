@@ -7,15 +7,13 @@ import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 public class Robot extends TimedRobot {
     private Command m_autonomousCommand;
-    private final RobotContainer m_robotContainer;
+    private RobotContainer m_robotContainer;
 
     private final HootAutoReplay m_timeAndJoystickReplay = new HootAutoReplay()
         .withTimestampReplay()
         .withJoystickReplay();
 
-    public Robot() {
-        m_robotContainer = new RobotContainer();
-    }
+    public Robot() {}
 
     @Override
     public void robotPeriodic() {
@@ -38,7 +36,10 @@ public class Robot extends TimedRobot {
         }
     }
 
-    @Override public void robotInit() {}
+    @Override 
+    public void robotInit() {
+        m_robotContainer = new RobotContainer(); // move here from constructor
+    }
     @Override public void disabledInit() {}
     @Override public void disabledPeriodic() {}
     @Override public void disabledExit() {}

@@ -26,7 +26,7 @@ public class CameraSubsystem extends SubsystemBase {
     private StructPublisher<Pose3d> EstimatedPosition;
     private final PhotonCamera camera;
     private final PhotonPoseEstimator photonEstimator;
-    private final AprilTagFieldLayout aprilTagLayout = AprilTagFieldLayout.loadField(AprilTagFields.k2026RebuiltAndymark);
+    private static final AprilTagFieldLayout aprilTagLayout = AprilTagFieldLayout.loadField(AprilTagFields.k2026RebuiltAndymark);
 
     private List<EstimatedRobotPose> latestEstimates = List.of();
     private List<PhotonPipelineResult> cachedResults = List.of();
